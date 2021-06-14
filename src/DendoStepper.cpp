@@ -1,7 +1,5 @@
 #include "DendoStepper.h"
 
-static bool stepTaken = 0;
-static uint32_t cnt = 0;
 
 DendoStepper::DendoStepper(DendoStepper_config_t *config)
 {
@@ -26,15 +24,14 @@ void DendoStepper::run()
             //gpio_set_level(GPIO_NUM_14,0);
         }
         else{
-            timer_pause(TIMER_GROUP_0,TIMER_0);
+            timer_pause(conf->timer_group,conf->timer_idx);
             ESP_LOGI("timer","disabled");
         }*/
         //ESP_LOGI("stepInt","%d",ctrl.stepInterval);
         if (ctrl.stepsToGo == 0)
         {
 
-            ESP_LOGI("step", "done");
-            stepTaken = 0;
+            ESP_LOGI("step", "%d", ctrl.stepCnt);
         }
         vTaskDelay(20);
     }
@@ -50,29 +47,28 @@ bool DendoStepper::xISR()
     gpio_set_level(GPIO_NUM_14, 1);
     if (ctrl.stepsToGo == 0)
     {
-        timer_pause(TIMER_GROUP_0, TIMER_0);
+        timer_pause(conf->timer_group, conf->timer_idx);
         return 0;
     }
-    if(ctrl.stepCnt<=ctrl.accEnd){
-        ctrl.stepInterval-=ctrl.accStepInc;
-        timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,ctrl.stepInterval);
-    } else if(ctrl.stepCnt>=ctrl.coastEnd){
-        ctrl.stepInterval+=ctrl.accStepInc;
-        timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,ctrl.stepInterval);
+    if (ctrl.stepCnt <= ctrl.accEnd)
+        ctrl.stepInterval -= ctrl.accStepInc;
+    else if (ctrl.stepCnt >= ctrl.coastEnd)
+        ctrl.stepInterval += ctrl.accStepInc;
+    if (ctrl.stepInterval <= 0)
+    { //safeguard
+        ctrl.stepInterval = ctrl.accStepInc;
     }
+
+    timer_set_alarm_value(conf->timer_group, conf->timer_idx, ctrl.stepInterval);
     ctrl.stepCnt++;
     ctrl.stepsToGo--;
     gpio_set_level(GPIO_NUM_14, 0); //this should be enough for driver to register pulse
     return 0;
 }
 
-void DendoStepper::yISR(void *p)
-{
-}
-
 void DendoStepper::init(TaskHandle_t *h)
 {
-    uint64_t mask = (1 << conf->X.step_p);
+    uint64_t mask = (1 << conf->step_p) | (1 << conf->dir_p);
     gpio_config_t gpio_conf = {
         .pin_bit_mask = mask,
         .mode = GPIO_MODE_OUTPUT,
@@ -89,64 +85,61 @@ void DendoStepper::init(TaskHandle_t *h)
         .intr_type = TIMER_INTR_LEVEL,      //interrupt is overrated
         .counter_dir = TIMER_COUNT_UP,      //count up duh
         .auto_reload = TIMER_AUTORELOAD_EN, //whatever
-        .divider = 80,                      //1ms resolution
+        .divider = 80,                      //1us resolution
     };
-    ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));
-    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0); //set it to 0
-    timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, xISRwrap, this, 0);
+    ESP_ERROR_CHECK(timer_init(conf->timer_group, conf->timer_idx, &timer_conf));
+    timer_set_counter_value(conf->timer_group, conf->timer_idx, 0); //set it to 0
+    timer_isr_callback_add(conf->timer_group, conf->timer_idx, xISRwrap, this, 0);
     ESP_LOGI("timer", "configured");
 }
 
 void DendoStepper::runPos(int32_t relative)
 {
     calc(ctrl.speed, ctrl.acc, relative);
-    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, ctrl.stepInterval);
-    timer_start(TIMER_GROUP_0, TIMER_0);
+    timer_set_alarm_value(conf->timer_group, conf->timer_idx, ctrl.stepInterval);
+    timer_start(conf->timer_group, conf->timer_idx);
     ESP_LOGI("alarm", "set %d", ctrl.stepInterval);
     xTaskCreate(runTask, "DendoStepper", 4096, this, 5, NULL);
 }
 
-void DendoStepper::setSpeed(uint16_t speed,uint16_t acc)
+void DendoStepper::setSpeed(uint16_t speed, uint16_t acc)
 {
-    ctrl.speed=speed;
-    ctrl.acc=acc;
+    ctrl.speed = speed;
+    ctrl.acc = acc;
     ESP_LOGI("speed", "set");
 }
 
-void DendoStepper::calc(uint16_t speed, uint16_t acc, uint32_t target)
+void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
 {
-    float accTime =0;                       //acceleration time
-    float coastTime=0;
-    uint32_t stepsLeft=0;
-    uint32_t tdS=0;
+    float acc = 0; //acceleration time
+    uint32_t stepsLeft = 0;
+    uint32_t tdS = 0;
+    float accTime = accTimeMs / 1000.0; //ms to s
     while (1)
     {
-        accTime=speed / acc;
-        tdS = acc * (accTime * accTime); //acc and dec steps displacement
+        acc = speed / accTime;
+        tdS = acc * accTime * accTime; //acc and dec steps displacement - number of steps needed for acc/dec
 
-        if (target > tdS)   //we will be coasting
+        if (target > tdS) //we will be coasting
         {
-            stepsLeft = target - tdS;       //how many steps we will be coasting
-            coastTime = stepsLeft/speed;    //how long we will be coasting
-            break;  //we are done break out of loop
+            stepsLeft = target - tdS; //how many steps we will be coasting
+            break;
         }
-        else if(target==tdS){   //triangular move
-            break;  //we are done, end loop
-        }
-        else if (target < tdS)  //not enough steps, recalculate acctime
+        else if (target < tdS) //not enough steps, calc triangular params recursively
         {
-            speed=acc*2;
-            /*speed = sqrt(tdS * acc);
-            acc=*/
-            ESP_LOGI("calc","recalculation");
-            //go back and recalculate with new acctime
+            speed = sqrt(target * acc);
+        }
+        else
+        {
+            break;
         }
     }
     //save to ctrlVar
-    uint32_t dS=tdS*0.5;
-    ctrl.accEnd=dS;
-    ctrl.coastEnd=dS+stepsLeft;
-    ctrl.stepsToGo=target;
-    ctrl.accStepInc=(accTime*1000ULL)/dS;
-    ctrl.stepInterval=((stepsLeft/speed)*1000ULL)+(dS*ctrl.accStepInc);
+    uint32_t dS = tdS * 0.5;
+    ctrl.accEnd = dS;
+    ctrl.coastEnd = dS + stepsLeft;
+    ctrl.stepsToGo = target;
+    ctrl.accStepInc = (accTime*1000ULL) / dS;
+    ctrl.stepInterval = ((stepsLeft) / (float)speed) + (dS * ctrl.accStepInc);
+    ESP_LOGI("calcprint", "accTime=%d tds=%u accend=%d coastend=%d stepstogo=%d accstepinc=%d stepint=%d stepsleft=%d", accTimeMs, tdS, ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.accStepInc, ctrl.stepInterval, stepsLeft);
 }

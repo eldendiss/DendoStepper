@@ -11,21 +11,13 @@
 #include "esp_log.h"
 #include "math.h"
 
-/* HW configuration library */
-typedef struct{
-    uint8_t step_p;
-    uint8_t dir_p;
-}X_config_t;
-
-typedef struct{
-    uint8_t step_p;
-    uint8_t dir_p;
-}Y_config_t;
-
+/* HW configuration struct */
 typedef struct
 {
-    X_config_t X;
-    Y_config_t Y;
+    uint8_t         step_p;
+    uint8_t         dir_p;
+    timer_group_t   timer_group/*=TIMER_GROUP_0*/;
+    timer_idx_t     timer_idx;
 } DendoStepper_config_t;
 
 typedef struct{
@@ -47,7 +39,6 @@ private:
     void calc(uint16_t, uint16_t,uint32_t);
     static bool xISRwrap(void*);
     bool xISR();
-    static void yISR(void*);
 public:
     /** @brief Costructor - prepares conf variables
      *  @param config DendoStepper_config_t pointer
@@ -69,6 +60,7 @@ public:
 
     /** @brief sets motor speed
      *  @param speed speed in steps per second
+     *  @param accTimeMs acceleration time in ms
      */
     void setSpeed(uint16_t,uint16_t);
 };
