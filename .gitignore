@@ -8,3 +8,4 @@ sdkconfig
 .vscode/extensions.json
 test/README
 platformio.ini
+todo.txt
