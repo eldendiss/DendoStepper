@@ -6,7 +6,6 @@
 #include "stdint.h"
 #include "driver/timer.h"
 #include "driver/gpio.h"
-#include "esp_log.h"
 #include "math.h"
 
 #define ENDSW_DISABLED 255
