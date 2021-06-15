@@ -37,18 +37,6 @@ void task(void*p){
     }
 }
 
-void task(void*p){
-    while(1){
-        vTaskDelay(1000);
-        if(step.getState()<=IDLE){
-            if(step.home(1000,1000,CCW)){
-            ESP_LOGI("homing","now");
-            vTaskDelete(NULL);
-        }
-        }
-    }
-}
-
 extern "C" void app_main() {
     step.init();
     step.setSpeed(1000,1000);
