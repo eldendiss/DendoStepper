@@ -8,6 +8,7 @@
 #include "driver/gpio.h"
 #include "math.h"
 
+
 #define ENDSW_DISABLED 255
 #define HOME_ISR_DEBOUNCE 10
 /* HW configuration struct */
@@ -33,6 +34,7 @@ enum dir{
     CW,
     CCW
 };
+
 typedef struct{
     uint32_t    stepInterval=2000;  //step interval in us
     uint16_t    accStepInc=100;     //step interval increase during acc/dec phase
@@ -52,7 +54,6 @@ private:
     DendoStepper_config_t *conf;
     ctrl_var_t ctrl;
     uint64_t currentPos=0;  //absolute position
-
     /** @brief PRIVATE: Step interval calculation
      *  @param speed maximum movement speed
      *  @param accTimeMs acceleration time in ms
