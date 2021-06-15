@@ -28,7 +28,7 @@ void task(void*p){
 
 extern "C" void app_main() {
     step.init();
-    step.setSpeed(3200,500);
+    step.setSpeed(1000,1000);
     //step.runPos(-1000);
     xTaskCreate(task,"stepper",4096,NULL,10,NULL);
 }

@@ -155,8 +155,12 @@ void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
     ctrl.accEnd = dS;
     ctrl.coastEnd = dS + stepsLeft;
     ctrl.stepsToGo = target;
-    ctrl.accStepInc = ((accTime*1000000L) / dS);
-    ctrl.stepInterval = (1000000ULL / ((float)speed)) + ((dS/32) * ctrl.accStepInc);
+    uint64_t dspow2=dS*dS;
+    if(dspow2 > (accTime*1000000ULL)) //we cant use that acceleration bcs of timer resolution, use 1
+        ctrl.accStepInc=1;             //TODO: update int every x steps
+    else
+        ctrl.accStepInc = (accTime*1000000L)/dspow2;
+    ctrl.stepInterval = (1000000ULL / ((float)speed)) + (dS * ctrl.accStepInc);
 }
 
 uint8_t DendoStepper::getState(){
