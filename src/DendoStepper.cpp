@@ -27,7 +27,7 @@ void DendoStepper::enableMotor(){
 
 bool DendoStepper::xISR()
 {
-    gpio_set_level(GPIO_NUM_14, 1);     //step pulse
+    gpio_set_level((gpio_num_t)conf->step_p, 1);     //step pulse
     //add and substract one step
     ctrl.stepCnt++;
     ctrl.stepsToGo--;
@@ -62,7 +62,7 @@ bool DendoStepper::xISR()
 
     //set alarm to calculated interval
     timer_set_alarm_value(conf->timer_group, conf->timer_idx, ctrl.stepInterval);
-    gpio_set_level(GPIO_NUM_14, 0); //this should be enough for driver to register pulse
+    gpio_set_level((gpio_num_t)conf->step_p, 0); //this should be enough for driver to register pulse
     return 0;
 }
 
