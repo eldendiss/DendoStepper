@@ -1,5 +1,5 @@
 #include "DendoStepper.h"
-
+static uint16_t ISRcnt=0;
 
 DendoStepper::DendoStepper(DendoStepper_config_t *config)
 {
@@ -79,17 +79,18 @@ void DendoStepper::init()
     //set outputs
     ESP_ERROR_CHECK(gpio_config(&gpio_conf));
 
-    mask=(1<<conf->endSw_p);
-    gpio_conf={
-        .pin_bit_mask=mask,
-        .mode=GPIO_MODE_INPUT,
-        .pull_up_en=GPIO_PULLUP_ENABLE,
-        .pull_down_en=GPIO_PULLDOWN_DISABLE,
-        .intr_type=GPIO_INTR_NEGEDGE,   //we need to fire when edge is falling
-    };
-    //set inputs
-    ESP_ERROR_CHECK(gpio_config(&gpio_conf));
-
+    if(conf->endSw_p!=ENDSW_DISABLED){
+        mask=(1<<conf->endSw_p);
+        gpio_conf={
+            .pin_bit_mask=mask,
+            .mode=GPIO_MODE_INPUT,
+            .pull_up_en=GPIO_PULLUP_ENABLE,
+            .pull_down_en=GPIO_PULLDOWN_DISABLE,
+            .intr_type=GPIO_INTR_NEGEDGE,   //we need to fire when edge is falling
+        };
+        //set inputs
+        ESP_ERROR_CHECK(gpio_config(&gpio_conf));
+    }
     timer_config_t timer_conf = {
         .alarm_en = TIMER_ALARM_EN,         //we need alarm
         .counter_en = TIMER_PAUSE,          //dont start now lol
@@ -176,7 +177,7 @@ bool DendoStepper::runAbsolute(uint32_t position){
 }
 
 bool DendoStepper::home(uint16_t speed, uint16_t accTimeMs, bool dir){
-    if(getState()>IDLE)
+    if(getState()>IDLE || conf->endSw_p==ENDSW_DISABLED)
         return false;   //we cant do this rn, try again later
     
     int32_t steps=0;
@@ -191,8 +192,10 @@ bool DendoStepper::home(uint16_t speed, uint16_t accTimeMs, bool dir){
 }
 
 void DendoStepper::homeISR() {
-    ctrl.stepsToGo=0;
-    timer_pause(conf->timer_group,conf->timer_idx); //stop movement
-    currentPos=0;   //we are homed
-    //return 0;
+    if(ISRcnt++>HOME_ISR_DEBOUNCE){
+        ctrl.stepsToGo=0;
+        timer_pause(conf->timer_group,conf->timer_idx); //stop movement
+        currentPos=0;   //we are homed
+        ISRcnt=0;
+    }
 }

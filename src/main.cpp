@@ -16,13 +16,13 @@ DendoStepper step(&conf);
 
 void task(void*p){
     while(1){
+        vTaskDelay(1000);
         if(step.getState()<=IDLE){
-            uint32_t pos=esp_random()>>16;
-            ESP_LOGI("runTo","%d",pos);
-            if(step.runAbsolute(pos))
-                ESP_LOGI("runAbs","illegal");
+            if(step.home(1000,1000,CCW)){
+            ESP_LOGI("homing","now");
+            vTaskDelete(NULL);
         }
-    vTaskDelay(100);
+        }
     }
 }
 
@@ -30,5 +30,6 @@ extern "C" void app_main() {
     step.init();
     step.setSpeed(1000,1000);
     //step.runPos(-1000);
+    step.runAbsolute(2500);
     xTaskCreate(task,"stepper",4096,NULL,10,NULL);
 }

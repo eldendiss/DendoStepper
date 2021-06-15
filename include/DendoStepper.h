@@ -9,7 +9,8 @@
 #include "esp_log.h"
 #include "math.h"
 
-#define ENDSW_DISABLED
+#define ENDSW_DISABLED 255
+#define HOME_ISR_DEBOUNCE 10
 /* HW configuration struct */
 typedef struct
 {
