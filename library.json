@@ -6,27 +6,21 @@
     "repository":
     {
       "type": "git",
-      "url": "https://github.com/username/hello-world.git"
+      "url": "https://github.com/eldendiss/DendoStepper.git"
     },
     "authors":
     [
       {
-        "name": "John Smith",
-        "email": "me@john-smith.com",
-        "url": "https://www.john-smith/contact"
-      },
-      {
-        "name": "Andrew Smith",
-        "email": "me@andrew-smith.com",
-        "url": "https://www.andrew-smith/contact",
-        "maintainer": true
+        "name": "Denis Voltmann"
       }
     ],
-    "license": "MIT",
-    "homepage": "https://www.helloworld.org/",
-    "dependencies": {
-      "ownername/print": "~1.3.0"
-    },
-    "frameworks": "*",
-    "platforms": "*"
+    "license": "GPL-3.0-only",
+    "include": 
+    [
+        "src/*.cpp",
+        "include/*.h",
+        "examples/*.*"
+    ],
+    "frameworks": "espidf",
+    "platforms": "espressif32"
   }
