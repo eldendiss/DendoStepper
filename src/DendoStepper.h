@@ -134,6 +134,11 @@ public:
      *  @return false if motor cant be moved rn /e.g is moving to another position/, true if command is accepted
      */
     bool home(uint16_t speed,uint16_t accTimeMs,bool dir);
+
+    /** @brief returns current absolute position
+     *  @return current absolute postion in steps
+     */
+    uint64_t getPosition();
 };
 
 #endif

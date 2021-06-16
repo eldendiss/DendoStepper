@@ -199,3 +199,7 @@ void DendoStepper::homeISR() {
         ISRcnt=0;
     }
 }
+
+uint64_t DendoStepper::getPosition() {
+    return currentPos;
+}
