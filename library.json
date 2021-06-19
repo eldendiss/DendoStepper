@@ -1,6 +1,6 @@
 {
     "name": "DendoStepper_espidf",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Library for controlling up to 4 stepper motors utilizing general purpose timers",
     "keywords": "espidf,steppermotor,esp32",
     "repository":

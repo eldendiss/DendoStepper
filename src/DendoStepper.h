@@ -10,7 +10,7 @@
 
 
 #define ENDSW_DISABLED 255
-#define HOME_ISR_DEBOUNCE 10
+#define HOME_ISR_DEBOUNCE 5
 /* HW configuration struct */
 typedef struct
 {
@@ -46,6 +46,7 @@ typedef struct{
     uint16_t    acc=100;            //acceleration in steps*second^-2
     uint8_t     status=DISABLED;
     bool        dir=CW;
+    bool        homed=false;
 }ctrl_var_t;
 
 class DendoStepper
@@ -92,6 +93,15 @@ public:
      *  @param config DendoStepper_config_t pointer
      */
     DendoStepper(DendoStepper_config_t* config);
+
+    /** @brief Costructor - conf variables to be passed later
+     */
+    DendoStepper();
+
+    /** @brief Configuration of library, used with constructor w/o params
+     *  @param config DendoStepper_config_t pointer
+     */
+    void config(DendoStepper_config_t* config);
     
     /** @brief initialize GPIO and Timer peripherals
      */
@@ -131,7 +141,7 @@ public:
      *  @param speed speed which will be used for homing
      *  @param accTimeMs acceleration time in ms
      *  @param dir
-     *  @return false if motor cant be moved rn /e.g is moving to another position/, true if command is accepted
+     *  @return false if motor cant be moved rn or homing is in progress, true if we are homed
      */
     bool home(uint16_t speed,uint16_t accTimeMs,bool dir);
 
@@ -139,6 +149,20 @@ public:
      *  @return current absolute postion in steps
      */
     uint64_t getPosition();
+
+    /** @brief returns current speed
+     */
+    uint16_t getSpeed();
+
+    /** @brief returns current acceleration time in ms
+     */
+    uint16_t getAcc();
+
+    /** @brief stops the motor dead, but stays enabled
+     */
+    void stop();
+
+    bool isHomed();
 };
 
 #endif

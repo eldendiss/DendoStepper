@@ -6,6 +6,12 @@ DendoStepper::DendoStepper(DendoStepper_config_t *config)
     conf = config;
 }
 
+DendoStepper::DendoStepper(){}
+
+void DendoStepper::config(DendoStepper_config_t* config){
+    conf=config;
+}
+
 void DendoStepper::setEn(bool state){
     ESP_ERROR_CHECK(gpio_set_level((gpio_num_t)conf->step_p,state));
 }
@@ -171,6 +177,7 @@ uint8_t DendoStepper::getState(){
 bool DendoStepper::runAbsolute(uint32_t position){
     if(getState()>IDLE)
         return false;   //we cant run this command rn
+    ctrl.homed=false;   //we are not longer homed
     runPos(position-currentPos);    //run to new position
     return 1;
     
@@ -179,7 +186,8 @@ bool DendoStepper::runAbsolute(uint32_t position){
 bool DendoStepper::home(uint16_t speed, uint16_t accTimeMs, bool dir){
     if(getState()>IDLE || conf->endSw_p==ENDSW_DISABLED)
         return false;   //we cant do this rn, try again later
-    
+    if(ctrl.homed)      //we are homed already
+        return true;
     int32_t steps=0;
     if(dir)
         steps=INT32_MIN;
@@ -187,8 +195,9 @@ bool DendoStepper::home(uint16_t speed, uint16_t accTimeMs, bool dir){
         steps=INT32_MAX;
     gpio_install_isr_service(0);    //install gpio interrputs
     gpio_isr_handler_add((gpio_num_t)conf->endSw_p,homeISRwrap,this);
+    setSpeed(speed,accTimeMs);
     runPos(steps);
-    return true;
+    return false;
 }
 
 void DendoStepper::homeISR() {
@@ -197,9 +206,27 @@ void DendoStepper::homeISR() {
         timer_pause(conf->timer_group,conf->timer_idx); //stop movement
         currentPos=0;   //we are homed
         ISRcnt=0;
+        ctrl.status=IDLE;
+        ctrl.homed=true;    //mark that we are homed
     }
 }
 
 uint64_t DendoStepper::getPosition() {
     return currentPos;
+}
+
+uint16_t DendoStepper::getSpeed(){
+    return ctrl.speed;
+}
+
+uint16_t DendoStepper::getAcc(){
+    return ctrl.acc;
+}
+
+void DendoStepper::stop(){
+    ctrl.stepsToGo=0;   //no need more steps needed, xISR should take care of the rest
+}
+
+bool DendoStepper::isHomed(){
+    return ctrl.homed;
 }
