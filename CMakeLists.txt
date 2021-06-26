@@ -1,0 +1,1 @@
+idf_component_register(SRCS DendoStepper.cpp INCLUDE_DIRS include)
