@@ -52,7 +52,7 @@ typedef struct{
 class DendoStepper
 {
 private:
-    DendoStepper_config_t *conf;
+    const DendoStepper_config_t *conf;
     ctrl_var_t ctrl;
     uint64_t currentPos=0;  //absolute position
     /** @brief PRIVATE: Step interval calculation
@@ -92,7 +92,7 @@ public:
     /** @brief Costructor - prepares conf variables
      *  @param config DendoStepper_config_t pointer
      */
-    DendoStepper(DendoStepper_config_t* config);
+    DendoStepper(const DendoStepper_config_t* config);
 
     /** @brief Costructor - conf variables to be passed later
      */
@@ -101,7 +101,7 @@ public:
     /** @brief Configuration of library, used with constructor w/o params
      *  @param config DendoStepper_config_t pointer
      */
-    void config(DendoStepper_config_t* config);
+    void config(const DendoStepper_config_t* config);
     
     /** @brief initialize GPIO and Timer peripherals
      */

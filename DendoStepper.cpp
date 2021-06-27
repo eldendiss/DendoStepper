@@ -1,13 +1,13 @@
 #include "DendoStepper.h"
 
-DendoStepper::DendoStepper(DendoStepper_config_t *config)
+DendoStepper::DendoStepper(const DendoStepper_config_t *config)
 {
     conf = config;
 }
 
 DendoStepper::DendoStepper(){}
 
-void DendoStepper::config(DendoStepper_config_t* config){
+void DendoStepper::config(const DendoStepper_config_t* config){
     conf=config;
 }
 
