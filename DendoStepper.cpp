@@ -73,7 +73,7 @@ bool DendoStepper::xISR()
 
 void DendoStepper::init()
 {
-    uint64_t mask = (1 << conf->step_p) | (1 << conf->dir_p) | (1 << conf->en_p);
+    uint64_t mask = (1LL << conf->step_p) | (1LL << conf->dir_p) | (1 << conf->en_p);
     gpio_config_t gpio_conf = {
         .pin_bit_mask = mask,
         .mode = GPIO_MODE_OUTPUT,
@@ -85,13 +85,13 @@ void DendoStepper::init()
     ESP_ERROR_CHECK(gpio_config(&gpio_conf));
 
     if(conf->endSw_p!=ENDSW_DISABLED){
-        mask=(1<<conf->endSw_p);
+        mask=(1LL << conf->endSw_p);
         gpio_conf={
             .pin_bit_mask=mask,
             .mode=GPIO_MODE_INPUT,
             .pull_up_en=GPIO_PULLUP_ENABLE,
             .pull_down_en=GPIO_PULLDOWN_DISABLE,
-            .intr_type=GPIO_INTR_LOW_LEVEL,   //we need to fire when we are low
+            .intr_type=GPIO_INTR_NEGEDGE,   //we need to fire when we are low
         };
         //set inputs
         ESP_ERROR_CHECK(gpio_config(&gpio_conf));
@@ -205,7 +205,7 @@ void DendoStepper::homeISR() {
     currentPos=0;   //we are homed
     ctrl.status=IDLE;
     ctrl.homed=true;    //mark that we are homed
-    gpio_isr_handler_remove((gpio_num_t)conf->endSw_p); //remove handler so we wont trip it intentionally
+    gpio_isr_handler_remove((gpio_num_t)conf->endSw_p); //remove handler so we wont trip it unintentionally
 }
 
 uint64_t DendoStepper::getPosition() {
