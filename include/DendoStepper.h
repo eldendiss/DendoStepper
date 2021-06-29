@@ -28,6 +28,7 @@ enum motor_status{
     ACC,
     COAST,
     DEC,
+    INF,
 };
 
 enum dir{
@@ -47,6 +48,7 @@ typedef struct{
     uint8_t     status=DISABLED;
     bool        dir=CW;
     bool        homed=false;
+    bool        runInfinite=true;
 }ctrl_var_t;
 
 class DendoStepper
@@ -61,6 +63,12 @@ private:
      *  @param target target position
      */
     void calc(uint16_t, uint16_t,uint32_t);
+
+    /** @brief PRIVATE: Step interval calculation for infinite movement
+     *  @param speed maximum movement speed
+     *  @param accTimeMs acceleration time in ms
+     */
+    void calc(uint16_t, uint16_t);
 
     /** @brief sets En GPIO
      *  @param state 0-LOW,1-HIGH
@@ -87,6 +95,7 @@ private:
 
     bool xISR();
     void homeISR();
+    void decel();
 
 public:
     /** @brief Costructor - prepares conf variables
@@ -111,6 +120,8 @@ public:
      *  @param relative number of steps to run, negative is reverse 
      */
     void runPos(int32_t relative);
+
+    void runInf();
 
     /** @brief sets motor speed
      *  @param speed speed in steps per second
