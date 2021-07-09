@@ -9,15 +9,14 @@
 #include "math.h"
 
 
-#define ENDSW_DISABLED 255
 #define HOME_ISR_DEBOUNCE 0
+#define ACCTIME_US (uint64_t)(accTime*1000000ULL)
 /* HW configuration struct */
 typedef struct
 {
     uint8_t         step_p;         //step signal gpio
     uint8_t         dir_p;          //dir signal gpio
     uint8_t         en_p;           //enable signal gpio
-    uint8_t         endSw_p;        //endstop switch gpio, if not used set it to ENDSW_DISABLED
     timer_group_t   timer_group;    //timer group, useful if we are controlling more than 2 steppers
     timer_idx_t     timer_idx;      //timer index, useful if we are controlling 2steppers
 } DendoStepper_config_t;
@@ -45,6 +44,7 @@ typedef struct{
     uint32_t    stepsToGo=0;        //steps we need to take
     uint16_t    speed=100;          //speed in steps*second^-1
     uint16_t    acc=100;            //acceleration in steps*second^-2
+    uint8_t     recalcInt=1;        //how much steps to take until recalculation (high speeds)
     uint8_t     status=DISABLED;
     bool        dir=CW;
     bool        homed=false;
@@ -89,12 +89,7 @@ private:
         return static_cast<DendoStepper *>(_this)->xISR();
     }
 
-    static void homeISRwrap(void* _this){
-        return static_cast<DendoStepper *>(_this)->homeISR();
-    }
-
     bool xISR();
-    void homeISR();
     void decel();
 
 public:
@@ -120,8 +115,6 @@ public:
      *  @param relative number of steps to run, negative is reverse 
      */
     void runPos(int32_t relative);
-
-    void runInf();
 
     /** @brief sets motor speed
      *  @param speed speed in steps per second
@@ -161,6 +154,10 @@ public:
      */
     uint64_t getPosition();
 
+    /** @brief resets absolute pos to 0
+     */
+    void resetAbsolute();
+
     /** @brief returns current speed
      */
     uint16_t getSpeed();
@@ -172,8 +169,6 @@ public:
     /** @brief stops the motor dead, but stays enabled
      */
     void stop();
-
-    bool isHomed();
 };
 
 #endif
