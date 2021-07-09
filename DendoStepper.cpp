@@ -1,5 +1,5 @@
 #include "DendoStepper.h"
-#include "esp_log.h"
+//#include "esp_log.h"
 
 DendoStepper::DendoStepper(const DendoStepper_config_t *config)
 {
@@ -190,7 +190,7 @@ void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
         ctrl.accStepInc = ACCTIME_US / dspow2;
     }
     ctrl.stepInterval = (1000000ULL / ((float)speed)) + (dS * (ctrl.accStepInc/ctrl.recalcInt));
-    ESP_LOGI("calc", "tds:%d accend:%d coastend:%d stepstogo:%d dspow:%llu stepinc:%d stepinterval:%d recalcInt:%d", tdS, ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, dspow2, ctrl.accStepInc, ctrl.stepInterval,ctrl.recalcInt);
+    //ESP_LOGI("calc", "tds:%d accend:%d coastend:%d stepstogo:%d dspow:%llu stepinc:%d stepinterval:%d recalcInt:%d", tdS, ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, dspow2, ctrl.accStepInc, ctrl.stepInterval,ctrl.recalcInt);
 }
 
 uint8_t DendoStepper::getState()
