@@ -10,7 +10,8 @@
 
 
 #define HOME_ISR_DEBOUNCE 0
-#define ACCTIME_US (uint64_t)(accTime*1000000ULL)
+#define ACCTIME_MAX (uint64_t)(accTime*25000000ULL)
+#define TICK_PER_S 25000000ULL
 /* HW configuration struct */
 typedef struct
 {

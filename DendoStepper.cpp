@@ -1,5 +1,5 @@
 #include "DendoStepper.h"
-//#include "esp_log.h"
+#include "esp_log.h"
 
 DendoStepper::DendoStepper(const DendoStepper_config_t *config)
 {
@@ -57,7 +57,7 @@ bool DendoStepper::xISR()
         return 0;
     }
 
-    if (ctrl.stepCnt % ctrl.recalcInt == 0)
+    if (ctrl.stepCnt % (ctrl.recalcInt+1) == 0)
     {
         if (ctrl.stepCnt <= ctrl.accEnd)
         { //we are currently accelerating
@@ -101,7 +101,7 @@ void DendoStepper::init()
         .intr_type = TIMER_INTR_LEVEL,      //interrupt
         .counter_dir = TIMER_COUNT_UP,      //count up duh
         .auto_reload = TIMER_AUTORELOAD_EN, //reload pls
-        .divider = 80,                      //1us resolution
+        .divider = 2,                      //25 ns resolution
     };
     ESP_ERROR_CHECK(timer_init(conf->timer_group, conf->timer_idx, &timer_conf));
     ESP_ERROR_CHECK(timer_set_counter_value(conf->timer_group, conf->timer_idx, 0)); //set it to 0
@@ -180,17 +180,17 @@ void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
     ctrl.coastEnd = dS + stepsLeft;
     ctrl.stepsToGo = target;
     uint64_t dspow2 = dS * dS;
-    if (dspow2 > ACCTIME_US){ //we cant use that acceleration bcs of timer resolution, use 1
-        ctrl.recalcInt = dspow2 / ACCTIME_US;
-        ctrl.accStepInc = ACCTIME_US / ((dspow2 != (ctrl.recalcInt*ACCTIME_US))?(dspow2 % (ctrl.recalcInt*ACCTIME_US)):ACCTIME_US); //TODO: update int every x steps
+    if (dspow2 > ACCTIME_MAX){ //we cant use that acceleration bcs of timer resolution, use 1
+        ctrl.recalcInt = dspow2 / ACCTIME_MAX;
+        ctrl.accStepInc = ACCTIME_MAX / ((dspow2 != (ctrl.recalcInt*ACCTIME_MAX))?(dspow2 % (ctrl.recalcInt*ACCTIME_MAX)):ACCTIME_MAX); //TODO: update int every x steps
         ctrl.accStepInc=ctrl.accStepInc*ctrl.recalcInt;
     }
     else{
         ctrl.recalcInt=1;
-        ctrl.accStepInc = ACCTIME_US / dspow2;
+        ctrl.accStepInc = ACCTIME_MAX / dspow2;
     }
-    ctrl.stepInterval = (1000000ULL / ((float)speed)) + (dS * (ctrl.accStepInc/ctrl.recalcInt));
-    //ESP_LOGI("calc", "tds:%d accend:%d coastend:%d stepstogo:%d dspow:%llu stepinc:%d stepinterval:%d recalcInt:%d", tdS, ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, dspow2, ctrl.accStepInc, ctrl.stepInterval,ctrl.recalcInt);
+    ctrl.stepInterval = (TICK_PER_S / ((float)speed)) + (dS * (ctrl.accStepInc/ctrl.recalcInt));
+    ESP_LOGI("calc", "tds:%d accend:%d coastend:%d stepstogo:%d dspow:%llu stepinc:%d stepinterval:%d recalcInt:%d", tdS, ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, dspow2, ctrl.accStepInc, ctrl.stepInterval,ctrl.recalcInt);
 }
 
 uint8_t DendoStepper::getState()
