@@ -8,7 +8,6 @@ DendoStepper_config_t conf={
     .step_p=14,
     .dir_p=27,
     .en_p=26,
-    .endSw_p=ENDSW_DISABLED,
     .timer_group=TIMER_GROUP_0,
     .timer_idx=TIMER_0,
 };
@@ -17,7 +16,6 @@ DendoStepper_config_t conf1={
     .step_p=13,
     .dir_p=12,
     .en_p=22,
-    .endSw_p=ENDSW_DISABLED,
     .timer_group=TIMER_GROUP_0,
     .timer_idx=TIMER_1,
 };

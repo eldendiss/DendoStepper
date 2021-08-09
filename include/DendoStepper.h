@@ -8,9 +8,11 @@
 #include "driver/gpio.h"
 #include "math.h"
 
+//#define STEP_DEBUG
 
 #define HOME_ISR_DEBOUNCE 0
-#define ACCTIME_US (uint64_t)(accTime*1000000ULL)
+#define ACCTIME_MAX (uint64_t)(accTime*25000000ULL)
+#define TICK_PER_S 25000000ULL
 /* HW configuration struct */
 typedef struct
 {
@@ -140,14 +142,6 @@ public:
      *  @return true if motor can run immediately, false if it is currently moving
      */
     bool runAbsolute(uint32_t position);
-
-    /** @brief homes motor, stops when stopswitch is hit and sets absolute position as 0
-     *  @param speed speed which will be used for homing
-     *  @param accTimeMs acceleration time in ms
-     *  @param dir
-     *  @return false if motor cant be moved rn or homing is in progress, true if we are homed
-     */
-    bool home(uint16_t speed,uint16_t accTimeMs,bool dir);
 
     /** @brief returns current absolute position
      *  @return current absolute postion in steps
