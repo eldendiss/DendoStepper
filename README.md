@@ -27,15 +27,20 @@ timer_group and timer_idx are used to assign different timers to different insta
 ```c++
 void init();
 ```  
-Initializes GPIO and Timer peripherals, registers ISR.  
+Initializes GPIO and Timer peripherals, registers ISR. Expects populated config struct is alreay passed to the object  
 
 ```c++
-void setSpeed(uint16_t speed,uint16_t accel_time);
+void config(const DendoStepper_config_t* config);
+```
+Same as init, but you can pass populated config struct if you didn't pass it in constructor.  
+
+```c++
+void setSpeed(uint16_t speed,uint16_t accTimeMs);
 ```
 Sets maximum speed in steps per second and acceleration time in milliseconds.  
 
 ```c++
-void runPos(int32_t position);
+void runPos(int32_t relative);
 ```
 Runs motor to position relative from current position, respecting constraints set with setSpeed()
 
@@ -56,5 +61,31 @@ enum motor_status{
     DEC,
 };
 ```
-Returns current state of motor, return type is enum motor_status
+Returns current state of motor, return type is enum motor_status  
+
+```c++
+ bool runAbsolute(uint32_t position);
+```
+Runs motor in absolute coordinate plane(should be constrained with home switch)  
+
+```c++
+void resetAbsolute();
+```
+Resets absolute position to 0. Called for ex. when endswitch is hit.
+
+```c++
+uint16_t getSpeed();
+```
+Returns currently set motor speed
+
+```c++
+uint16_t getAcc();
+```
+Returns currently set acceleration time in ms
+
+```c++
+void stop();
+```
+Stops the motor dead on the spot. Eg. e-stop.
+
 
