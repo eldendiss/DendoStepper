@@ -10,9 +10,11 @@
 
 //#define STEP_DEBUG
 
-#define HOME_ISR_DEBOUNCE 0
-#define ACCTIME_MAX (uint64_t)(accTime*25000000ULL)
-#define TICK_PER_S 25000000ULL
+
+#define NS_TO_T_TICKS(x) (x/25)
+#define TIMER_F 20000000ULL
+#define TICK_PER_S 40000000ULL
+
 /* HW configuration struct */
 typedef struct
 {
@@ -38,15 +40,17 @@ enum dir{
 };
 
 typedef struct{
-    uint32_t    stepInterval=2000;  //step interval in us
-    uint16_t    accStepInc=100;     //step interval increase during acc/dec phase
+    uint32_t    stepInterval=40000;  //step interval in ns/25
+    uint32_t    constInterval=10;
+    int32_t     accelC;
+    uint32_t    rest=0;     //step interval increase during acc/dec phase
     uint32_t    stepCnt=0;          //step counter
     uint32_t    accEnd;             //when to end acc and start coast
+    uint32_t    accLim;
     uint32_t    coastEnd;           //when to end coast and start decel
     uint32_t    stepsToGo=0;        //steps we need to take
-    uint16_t    speed=100;          //speed in steps*second^-1
-    uint16_t    acc=100;            //acceleration in steps*second^-2
-    uint8_t     recalcInt=1;        //how much steps to take until recalculation (high speeds)
+    float       speed=100;          //speed in steps*second^-1
+    float       acc=100;            //acceleration in steps*second^-2
     uint8_t     status=DISABLED;
     bool        dir=CW;
     bool        homed=false;
@@ -56,7 +60,7 @@ typedef struct{
 class DendoStepper
 {
 private:
-    const DendoStepper_config_t *conf;
+    DendoStepper_config_t conf;
     ctrl_var_t ctrl;
     uint64_t currentPos=0;  //absolute position
     /** @brief PRIVATE: Step interval calculation
@@ -95,10 +99,6 @@ private:
     void decel();
 
 public:
-    /** @brief Costructor - prepares conf variables
-     *  @param config DendoStepper_config_t pointer
-     */
-    DendoStepper(const DendoStepper_config_t* config);
 
     /** @brief Costructor - conf variables to be passed later
      */
@@ -107,11 +107,11 @@ public:
     /** @brief Configuration of library, used with constructor w/o params
      *  @param config DendoStepper_config_t pointer
      */
-    void config(const DendoStepper_config_t* config);
+    void config(DendoStepper_config_t config);
     
     /** @brief initialize GPIO and Timer peripherals
      */
-    void init();
+    void init(uint8_t,uint8_t,uint8_t,timer_group_t,timer_idx_t);
     
     /** @brief runs motor to relative position in steps
      *  @param relative number of steps to run, negative is reverse 
