@@ -6,6 +6,9 @@
 #include "stdint.h"
 #include "driver/timer.h"
 #include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_timer.h"
 #include "math.h"
 
 //#define STEP_DEBUG
@@ -14,16 +17,6 @@
 #define NS_TO_T_TICKS(x) (x/25)
 #define TIMER_F 20000000ULL
 #define TICK_PER_S 40000000ULL
-
-/* HW configuration struct */
-typedef struct
-{
-    uint8_t         step_p;         //step signal gpio
-    uint8_t         dir_p;          //dir signal gpio
-    uint8_t         en_p;           //enable signal gpio
-    timer_group_t   timer_group;    //timer group, useful if we are controlling more than 2 steppers
-    timer_idx_t     timer_idx;      //timer index, useful if we are controlling 2steppers
-} DendoStepper_config_t;
 
 enum motor_status{
     DISABLED,
@@ -39,9 +32,31 @@ enum dir{
     CCW
 };
 
+enum microStepping_t {
+    MICROSTEP_1=0x1,
+    MICROSTEP_2,
+    MICROSTEP_4=0x4,
+    MICROSTEP_8=0x8,
+    MICROSTEP_16=0x10,
+    MICROSTEP_32=0x20,
+    MICROSTEP_64=0x40,
+    MICROSTEP_128=0x80,
+    MICROSTEP_256=0x100,
+};
+
+/* HW configuration struct */
+typedef struct
+{
+    uint8_t         step_p;         //step signal gpio
+    uint8_t         dir_p;          //dir signal gpio
+    uint8_t         en_p;           //enable signal gpio
+    timer_group_t   timer_group;    //timer group, useful if we are controlling more than 2 steppers
+    timer_idx_t     timer_idx;      //timer index, useful if we are controlling 2steppers
+    microStepping_t miStep=MICROSTEP_1;
+} DendoStepper_config_t;
+
 typedef struct{
     uint32_t    stepInterval=40000;  //step interval in ns/25
-    uint32_t    constInterval=10;
     int32_t     accelC;
     uint32_t    rest=0;     //step interval increase during acc/dec phase
     uint32_t    stepCnt=0;          //step counter
@@ -51,10 +66,11 @@ typedef struct{
     uint32_t    stepsToGo=0;        //steps we need to take
     float       speed=100;          //speed in steps*second^-1
     float       acc=100;            //acceleration in steps*second^-2
+    uint64_t    enOffTime=10000L;
     uint8_t     status=DISABLED;
     bool        dir=CW;
     bool        homed=false;
-    bool        runInfinite=true;
+    bool        runInfinite=false;
 }ctrl_var_t;
 
 class DendoStepper
@@ -62,7 +78,11 @@ class DendoStepper
 private:
     DendoStepper_config_t conf;
     ctrl_var_t ctrl;
+    esp_timer_handle_t dyingTimer;
+    TaskHandle_t enTask;
     uint64_t currentPos=0;  //absolute position
+    bool timerStarted=0;
+
     /** @brief PRIVATE: Step interval calculation
      *  @param speed maximum movement speed
      *  @param accTimeMs acceleration time in ms
@@ -95,8 +115,24 @@ private:
         return static_cast<DendoStepper *>(_this)->xISR();
     }
 
+    /** @brief static wrapper for En timer
+     *  @param _this DendoStepper* this pointer
+     *  @return bool
+     */
+    static void enTimerWrap(void* _this){
+        static_cast<DendoStepper *>(_this)->enTimer();
+    }
+
+    /** @brief enableMotor wrapper
+     */
+    static void _disableMotor(void* _this){
+        static_cast<DendoStepper *>(_this)->disableMotor();
+    }
+
     bool xISR();
-    void decel();
+
+    void enTimer();
+
 
 public:
 
@@ -110,19 +146,32 @@ public:
     void config(DendoStepper_config_t config);
     
     /** @brief initialize GPIO and Timer peripherals
+     *  @param stepP step pulse pin
+     *  @param dirP direction signal pin
+     *  @param enP enable signal Pin
+     *  @param group timer group to use (0 or 1)
+     *  @param index which timer to use (0 or 1)
+     *  @param microstepping microstepping performed by the driver, used for more accuracy
+     *  @param stepsPerRot how many steps it takes for the motor to move 2Pi rads. this can be also used instead of microstepping parameter
      */
-    void init(uint8_t,uint8_t,uint8_t,timer_group_t,timer_idx_t);
+    void init(uint8_t,uint8_t,uint8_t,timer_group_t,timer_idx_t,microStepping_t microstep,uint16_t stepsPerRot);
     
     /** @brief runs motor to relative position in steps
      *  @param relative number of steps to run, negative is reverse 
      */
-    void runPos(int32_t relative);
+    esp_err_t runPos(int32_t relative);
 
     /** @brief sets motor speed
      *  @param speed speed in steps per second
      *  @param accTimeMs acceleration time in ms
      */
-    void setSpeed(uint16_t speed,uint16_t accTimeMs);
+    void setSpeed(uint32_t speed,uint16_t accTimeMs);
+
+    /** @brief sets motor speed and accel in radians
+     *  @param speed speed rad*s^-1
+     *  @param accTimeMs acceleration in rad*s^-2
+     */
+    void setSpeedRad(float speed, float accTimeMs);
 
     /** @brief set EN pin 1, stops movement
     */
@@ -163,6 +212,10 @@ public:
     /** @brief stops the motor dead, but stays enabled
      */
     void stop();
+
+    /** @brief sets the timeout after which motor is disabled
+     */
+    void setEnTimeout(uint64_t timeout);
 };
 
 #endif

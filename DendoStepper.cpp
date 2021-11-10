@@ -20,11 +20,6 @@ DendoStepper::DendoStepper()
 
 }
 
-void DendoStepper::config(DendoStepper_config_t config)
-{
-    conf = config;
-}
-
 void DendoStepper::setEn(bool state)
 {
     ESP_ERROR_CHECK(gpio_set_level((gpio_num_t)conf.en_p, state));
@@ -32,7 +27,7 @@ void DendoStepper::setEn(bool state)
 
 void DendoStepper::setDir(bool state)
 {
-    ctrl.dir = state;
+    //ctrl.dir = state;
     ESP_ERROR_CHECK(gpio_set_level((gpio_num_t)conf.dir_p, state));
 }
 
@@ -46,14 +41,16 @@ void DendoStepper::enableMotor()
 {
     setEn(false);
     ctrl.status = IDLE;
+    timerStarted=0;
 }
 
+/* Timer callback, used for generating pulses and calculating speed profile in real time */
 bool DendoStepper::xISR()
 {
-    gpio_set_level((gpio_num_t)14, (state=!state)); //step pulse
+    gpio_set_level((gpio_num_t)conf.step_p, (state=!state)); //step pulse
     //add and substract one step
     if(state==0)
-        return 0; //just turn off the pin
+        return 0; //just turn off the pin in this iteration
     
     ctrl.stepCnt++;
     ctrl.stepsToGo--;
@@ -62,46 +59,72 @@ bool DendoStepper::xISR()
         currentPos++;
     else if (currentPos > 0)
         currentPos--; //we cant go below 0, or var will overflow
-    //if we have nothing more to do, stop timer and end
+    
+    //we are done
     if (ctrl.stepsToGo == 0)
     {
-        timer_pause(conf.timer_group, conf.timer_idx);
+        timer_pause(conf.timer_group, conf.timer_idx);  //stop the timer
         ctrl.status = IDLE;
         ctrl.stepCnt = 0;
         gpio_set_level((gpio_num_t)conf.step_p, 0); //this should be enough for driver to register pulse
         return 0;
     }
-    //ESP_LOGI("kk","k");
-
+    
     if(ctrl.accelC >0 && ctrl.accelC<ctrl.accEnd){   //we are accelerating
         uint32_t oldInt=ctrl.stepInterval;
         ctrl.stepInterval=oldInt-(2*oldInt+ctrl.rest)/(4*ctrl.accelC+1);
         ctrl.rest=(2*oldInt+ctrl.rest)%(4*ctrl.accelC+1);
         ctrl.accelC++;
+        ctrl.status=ACC;    //we are accelerating, note that
+
     } else if(ctrl.stepCnt>ctrl.coastEnd){  //we must be deccelerating then
         uint32_t oldInt=ctrl.stepInterval;
-        ctrl.stepInterval=oldInt+((2*oldInt+ctrl.rest)/(4*ctrl.accelC+1));
-        ctrl.rest=(2*oldInt+ctrl.rest)%(4*ctrl.accelC+1);
+        ctrl.stepInterval=(int32_t)oldInt-((2*(int32_t)oldInt+(int32_t)ctrl.rest)/(4*ctrl.accelC+1));
+        ctrl.rest=(2*(int32_t)oldInt+(int32_t)ctrl.rest)%(4*ctrl.accelC+1);
         ctrl.accelC++;
+        ctrl.status=DEC;   //we are deccelerating
+
     } else { //we are coasting
-        //ctrl.stepInterval=ctrl.constInterval;
-        ctrl.accelC=ctrl.accEnd;
+        ctrl.status=COAST;  //we are coasting
+        ctrl.accelC=(int32_t)ctrl.coastEnd*-1;
+
     }
     
     //set alarm to calculated interval
     timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval/2);
-    //gpio_set_level((gpio_num_t)conf.step_p, 0);
     return 1;
 }
 
-void DendoStepper::init(uint8_t stepP,uint8_t dirP,uint8_t enP,timer_group_t group,timer_idx_t index)
+void DendoStepper::enTimer(){
+    while(1){
+        if(!timerStarted && ctrl.status==IDLE){
+            //create the en timer
+            esp_timer_create_args_t t_arg={
+                .callback=_disableMotor,
+                .arg=this,
+                .dispatch_method=ESP_TIMER_TASK,
+                .name="En timer",
+                .skip_unhandled_events=1,
+            };
+            esp_timer_create(&t_arg,&dyingTimer);
+            esp_timer_start_once(dyingTimer,ctrl.enOffTime);
+            timerStarted=1;
+        } else if(ctrl.status>IDLE){
+            esp_timer_delete(dyingTimer);
+        }
+        vTaskDelay(100);
+    }
+}
+
+void DendoStepper::init(uint8_t stepP,uint8_t dirP,uint8_t enP,timer_group_t group,timer_idx_t index,microStepping_t microstepping=MICROSTEP_1,uint16_t stepsPerRot=200)
 {
     conf.step_p=stepP;
     conf.dir_p=dirP;
     conf.en_p=enP;
     conf.timer_group=group;
     conf.timer_idx=index;
-
+    conf.miStep=microstepping;
+    ctrl.status=0;
     uint64_t mask = (1ULL << stepP) | (1ULL << dirP) | (1ULL << enP);   //put gpio pins in bitmask
     gpio_config_t gpio_conf = { //config gpios
         .pin_bit_mask = mask,
@@ -120,35 +143,21 @@ void DendoStepper::init(uint8_t stepP,uint8_t dirP,uint8_t enP,timer_group_t gro
         .auto_reload = TIMER_AUTORELOAD_EN, //reload pls
         .divider = 2,                       //25ns resolution
     };
+
     
     ESP_ERROR_CHECK(timer_init(conf.timer_group, conf.timer_idx, &timer_conf));   //init the timer
     ESP_ERROR_CHECK(timer_set_counter_value(conf.timer_group, conf.timer_idx, 0)); //set it to 0
     ESP_ERROR_CHECK(timer_isr_callback_add(conf.timer_group, conf.timer_idx, xISRwrap, this, 0)); //add callback fn to run when alarm is triggrd
 }
 
-void DendoStepper::runPos(int32_t relative)
+esp_err_t DendoStepper::runPos(int32_t relative)
 {
     if (!relative) //why would u call it with 0 wtf
-        return;
+        return ESP_ERR_NOT_SUPPORTED;
     if (ctrl.status > IDLE)
-    { //we are running, we need to adjust steps accordingly
-        if (relative < ctrl.stepsToGo)
-        {
-            return; //nothing
-        }
-        //if we are moving in the right direction, just add or sub steps to go
-        if (ctrl.dir == (relative < 0))
-        {
-            if (relative > 0)
-                relative += ctrl.stepsToGo;
-            else
-                relative -= ctrl.stepsToGo;
-        }
-        else
-        {
-            return; //idk what to do here yet, we need to move in the opposite direction
-        }
-        stop();
+    { //we are running, we need to adjust steps accordingly, for now just stop the movement
+        STEP_LOGW("DendoStepper","Finising previous move, this command will be ignored");
+        return ESP_ERR_NOT_SUPPORTED;
     }
     ctrl.homed = false;          //we are not longer homed
     if (ctrl.status == DISABLED) //if motor is disabled, enable it
@@ -157,41 +166,51 @@ void DendoStepper::runPos(int32_t relative)
     calc(ctrl.speed, ctrl.acc, abs(relative));  //calculate velocity profile
     ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval));  //set HW timer alarm to stepinterval
     ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));   //start the timer
+    return ESP_OK;
 }
 
-void DendoStepper::setSpeed(uint16_t speed, uint16_t accT)
+void DendoStepper::setSpeed(uint32_t speed, uint16_t accT)
 {
-    ctrl.speed = speed/(200.0*32.0);
+    ctrl.speed = speed/(200.0*(float)conf.miStep);
     ctrl.acc = ctrl.speed/(accT/1000.0);
+    STEP_LOGI("DendoStepper","Speed set: %f %f",ctrl.speed,ctrl.acc);
+}
+
+void DendoStepper::setSpeedRad(float speed, float acc){
+    ctrl.speed = speed;
+    ctrl.acc=acc;
     STEP_LOGI("DendoStepper","Speed set: %f %f",ctrl.speed,ctrl.acc);
 }
 
 void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
 {
 
+    //calculate number of steps needed for acceleration
     ctrl.accEnd=(ctrl.speed*ctrl.speed)/(2.0*0.0005*ctrl.acc);
+    //calculate the limit value of steps needed for acceleration
+    //(used if we dont have enough steps to perform full acc to max speed)
     ctrl.accLim= (target* ctrl.acc)/(ctrl.acc*2);
-    if(ctrl.accEnd<ctrl.accLim){   //we will be coasting
-        ctrl.coastEnd = target-ctrl.accEnd;
-    } else {
-        ctrl.accEnd=target-ctrl.accLim;
-        ctrl.coastEnd=ctrl.accEnd;
+
+    if(ctrl.accEnd<ctrl.accLim){   //acceleration is limited by max speed
+        ctrl.coastEnd = target-ctrl.accEnd; //calculate when to start deccelerating in steps 
+    } else {                        //acceleration is limited by start of the deceleration (triangular profile)
+        ctrl.coastEnd=ctrl.accEnd=target-ctrl.accLim; //no coast phase, we are limited by number of steps
     }
     //init vars
     ctrl.accelC=1;
     ctrl.rest=0;
-    //calculate initial stepinterval = timer_freq[Hz]*sqrt(((2*2*PI)/step_per_rot)/acceleration[rad*s^-2])
-    ctrl.stepInterval = (float)TIMER_F*sqrt((((4*3.14)/(200.0*32.0))/ctrl.acc));
-    //calculate interval for coasting = 1[s]/(speed[rad/s]*steps_per_rot)
-    //ctrl.constInterval= (float)TICK_PER_S/(ctrl.speed*200*32);
+    
+    //calculate initial interval, also known as c0
+    ctrl.stepInterval = (float)TIMER_F*sqrt((((4*3.14)/(200.0*(float)conf.miStep))/ctrl.acc));
+    
     //set steps we will take 
     ctrl.stepsToGo=target;
+    //debug
     STEP_LOGI("calc", "acc end:%u coastend:%u acclim:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.accLim, ctrl.stepsToGo, ctrl.speed, ctrl.acc,ctrl.stepInterval);
+    STEP_LOGI("calc","int: %u rest %u",ctrl.stepInterval,ctrl.rest);
     //init old interval
     uint32_t oldInt=ctrl.stepInterval;
-    /*ctrl.stepInterval=oldInt-(2*oldInt+ctrl.rest)/(4*ctrl.accelC+1);
-    ctrl.rest=(2*oldInt+ctrl.rest)%(4*ctrl.accelC+1);*/
-    STEP_LOGI("calc","int: %u rest %u",ctrl.stepInterval,ctrl.rest);
+    
 }
 
 uint8_t DendoStepper::getState()
@@ -233,6 +252,15 @@ uint16_t DendoStepper::getAcc()
 
 void DendoStepper::stop()
 {
-    ctrl.stepsToGo = 1; //no more steps needed, xISR should take care of the rest
+    ctrl.stepsToGo = 0; //no more steps needed, xISR should take care of the rest
     //todo: deccelerate
 }
+
+void DendoStepper::setEnTimeout(uint64_t timeout){
+    if(timeout==0){
+        vTaskDelete(enTask);
+    }
+    ctrl.enOffTime=timeout;
+    xTaskCreate(enTimerWrap,"En timer task",2048,this,7,&enTask);
+}
+
