@@ -34,6 +34,7 @@ void DendoStepper::setDir(bool state)
 void DendoStepper::disableMotor()
 {
     setEn(true);
+    STEP_LOGI("DendoStepper","Disabled");
     ctrl.status = DISABLED;
 }
 
@@ -41,6 +42,7 @@ void DendoStepper::enableMotor()
 {
     setEn(false);
     ctrl.status = IDLE;
+    STEP_LOGI("DendoStepper","Enabled");
     timerStarted=0;
 }
 
@@ -106,6 +108,7 @@ void DendoStepper::enTimer(){
                 .name="En timer",
                 .skip_unhandled_events=1,
             };
+            STEP_LOGI("DendoStepper","Enable timer started");
             esp_timer_create(&t_arg,&dyingTimer);
             esp_timer_start_once(dyingTimer,ctrl.enOffTime);
             timerStarted=1;
@@ -161,7 +164,8 @@ esp_err_t DendoStepper::runPos(int32_t relative)
     }
     ctrl.homed = false;          //we are not longer homed
     if (ctrl.status == DISABLED) //if motor is disabled, enable it
-        enableMotor();              
+        enableMotor(); 
+    ctrl.status=ACC;             
     setDir(relative < 0); //set CCW if <0, else set CW
     calc(ctrl.speed, ctrl.acc, abs(relative));  //calculate velocity profile
     ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval));  //set HW timer alarm to stepinterval
@@ -260,7 +264,7 @@ void DendoStepper::setEnTimeout(uint64_t timeout){
     if(timeout==0){
         vTaskDelete(enTask);
     }
-    ctrl.enOffTime=timeout;
+    ctrl.enOffTime=timeout*1000;
     xTaskCreate(enTimerWrap,"En timer task",2048,this,7,&enTask);
 }
 

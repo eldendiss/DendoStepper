@@ -67,7 +67,7 @@ typedef struct{
     float       speed=100;          //speed in steps*second^-1
     float       acc=100;            //acceleration in steps*second^-2
     uint64_t    enOffTime=10000L;
-    uint8_t     status=DISABLED;
+    volatile uint8_t     status=DISABLED;
     bool        dir=CW;
     bool        homed=false;
     bool        runInfinite=false;
