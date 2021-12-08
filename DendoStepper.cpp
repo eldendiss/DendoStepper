@@ -213,7 +213,7 @@ void DendoStepper::calc(uint16_t speed, uint16_t accTimeMs, uint32_t target)
     STEP_LOGI("calc", "acc end:%u coastend:%u acclim:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.accLim, ctrl.stepsToGo, ctrl.speed, ctrl.acc,ctrl.stepInterval);
     STEP_LOGI("calc","int: %u rest %u",ctrl.stepInterval,ctrl.rest);
     //init old interval
-    uint32_t oldInt=ctrl.stepInterval;
+    //uint32_t oldInt=ctrl.stepInterval;
     
 }
 
@@ -256,7 +256,8 @@ uint16_t DendoStepper::getAcc()
 
 void DendoStepper::stop()
 {
-    ctrl.stepsToGo = 0; //no more steps needed, xISR should take care of the rest
+    ctrl.stepsToGo = 1; //no more steps needed, xISR should take care of the rest
+    ctrl.status =IDLE;
     //todo: deccelerate
 }
 
