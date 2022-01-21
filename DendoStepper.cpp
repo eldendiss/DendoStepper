@@ -170,6 +170,8 @@ esp_err_t DendoStepper::runPos(int32_t relative)
     calc(ctrl.speed, ctrl.acc, abs(relative));  //calculate velocity profile
     ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval));  //set HW timer alarm to stepinterval
     ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));   //start the timer
+
+    currentPos += relative;
     return ESP_OK;
 }
 
@@ -230,8 +232,11 @@ bool DendoStepper::runAbsolute(uint32_t position)
     {
         //waiting for idle, watchdog should take care of inf loop if it occurs
     }                              //shouldnt take long tho
+    if(position < 0 || position == currentPos)
+        return ESP_FAIL;
+
     runPos(position - currentPos); //run to new position
-    return 1;
+    return ESP_OK;
 }
 
 uint64_t DendoStepper::getPosition()
