@@ -4,6 +4,8 @@
 #define DENDOSTEPPER_H
 
 #include "stdint.h"
+#include "stdio.h"
+#include <cstring>
 #include "driver/timer.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -44,21 +46,24 @@ enum microStepping_t {
     MICROSTEP_256=0x100,
 };
 
-/* HW configuration struct */
+/**
+ * @brief Configuration structure
+ */
 typedef struct
 {
-    uint8_t         step_p;         //step signal gpio
-    uint8_t         dir_p;          //dir signal gpio
-    uint8_t         en_p;           //enable signal gpio
-    timer_group_t   timer_group;    //timer group, useful if we are controlling more than 2 steppers
-    timer_idx_t     timer_idx;      //timer index, useful if we are controlling 2steppers
-    microStepping_t miStep=MICROSTEP_1;
+    uint8_t         stepPin;            /** step signal pin */
+    uint8_t         dirPin;             /** dir signal pin */
+    uint8_t         enPin;              /** enable signal pin */
+    timer_group_t   timer_group;        /** timer group, useful if we are controlling more than 2 steppers */
+    timer_idx_t     timer_idx;          /** timer index, useful if we are controlling 2steppers */
+    microStepping_t miStep;             /** microstepping configured on driver - used in distance calculation */
+    float           stepsPerRot;        /** one step angle in degrees (usually 1.8deg), used in distance calculation */
 } DendoStepper_config_t;
 
 typedef struct{
-    uint32_t    stepInterval=40000;  //step interval in ns/25
+    uint32_t    stepInterval=40000; //step interval in ns/25
     int32_t     accelC;
-    uint32_t    rest=0;     //step interval increase during acc/dec phase
+    uint32_t    rest=0;             //step interval increase during acc/dec phase
     uint32_t    stepCnt=0;          //step counter
     uint32_t    accEnd;             //when to end acc and start coast
     uint32_t    accLim;
@@ -72,6 +77,12 @@ typedef struct{
     bool        homed=false;
     bool        runInfinite=false;
 }ctrl_var_t;
+
+typedef struct {
+    uint32_t stepInterval = 40000;  /** step interval in ns/25 */
+    uint32_t accelEnd;              /** End of acceleration phase in steps */
+    uint32_t coastEnd;              /** End of coasting phase in steps */
+} speed_profile_t;
 
 class DendoStepper
 {
@@ -115,14 +126,6 @@ private:
         return static_cast<DendoStepper *>(_this)->xISR();
     }
 
-    /** @brief static wrapper for En timer
-     *  @param _this DendoStepper* this pointer
-     *  @return bool
-     */
-    static void enTimerWrap(void* _this){
-        static_cast<DendoStepper *>(_this)->enTimer();
-    }
-
     /** @brief enableMotor wrapper
      */
     static void _disableMotor(void* _this){
@@ -131,9 +134,6 @@ private:
 
     bool xISR();
 
-    void enTimer();
-
-
 public:
 
     /** @brief Costructor - conf variables to be passed later
@@ -141,11 +141,11 @@ public:
     DendoStepper();
 
     /** @brief Configuration of library, used with constructor w/o params
-     *  @param config DendoStepper_config_t pointer
+     *  @param config DendoStepper_config_t structure pointer - can be freed after this call
      */
-    void config(DendoStepper_config_t config);
+    void config(DendoStepper_config_t* config);
     
-    /** @brief initialize GPIO and Timer peripherals
+    /** @brief initialize GPIO and Timer peripherals - LEGACY - deemed obsolete
      *  @param stepP step pulse pin
      *  @param dirP direction signal pin
      *  @param enP enable signal Pin
@@ -156,6 +156,10 @@ public:
      */
     void init(uint8_t,uint8_t,uint8_t,timer_group_t,timer_idx_t,microStepping_t microstep,uint16_t stepsPerRot);
     
+    /** @brief initialize GPIO and Timer peripherals, class must be configured beforehand with @attention config()
+     */
+    void init();
+
     /** @brief runs motor to relative position in steps
      *  @param relative number of steps to run, negative is reverse 
      */
@@ -188,9 +192,9 @@ public:
 
     /** @brief run motor to position in absolute coordinates (steps)
      *  @param postition absolute position in steps from homing position (must be positive);
-     *  @return true if motor can run immediately, false if it is currently moving
+     *  @return ESP_OK if motor can run immediately, ESP_ERR if it is currently moving
      */
-    bool runAbsolute(uint32_t position);
+    esp_err_t runAbsolute(uint32_t position);
 
     /** @brief returns current absolute position
      *  @return current absolute postion in steps
@@ -200,6 +204,11 @@ public:
     /** @brief resets absolute pos to 0
      */
     void resetAbsolute();
+
+    /** @brief
+     * 
+    */
+    void runInf(bool direction);
 
     /** @brief returns current speed
      */
@@ -213,9 +222,6 @@ public:
      */
     void stop();
 
-    /** @brief sets the timeout after which motor is disabled
-     */
-    void setEnTimeout(uint64_t timeout);
 };
 
 #endif
