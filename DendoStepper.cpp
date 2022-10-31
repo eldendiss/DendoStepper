@@ -73,13 +73,13 @@ void DendoStepper::init()
         .intr_type = TIMER_INTR_LEVEL,      // interrupt
         .counter_dir = TIMER_COUNT_UP,      // count up duh
         .auto_reload = TIMER_AUTORELOAD_EN, // reload pls
-        .divider = 80000000ULL/TIMER_F,     // ns resolution
+        .divider = 80000000ULL / TIMER_F,   // ns resolution
     };
 
-    //calculate stepsPerRot
-    ctrl.stepsPerRot = (360.0/conf.stepAngle)*conf.miStep;
+    // calculate stepsPerRot
+    ctrl.stepsPerRot = (360.0 / conf.stepAngle) * conf.miStep;
 
-    STEP_LOGI("DendoStepper","Steps per one rotation:%d",ctrl.stepsPerRot);
+    STEP_LOGI("DendoStepper", "Steps per one rotation:%d", ctrl.stepsPerRot);
 
     if (conf.timer_group != TIMER_GROUP_MAX && conf.timer_idx != TIMER_MAX)
     {
@@ -127,20 +127,22 @@ esp_err_t DendoStepper::runPos(int32_t relative)
     if (ctrl.status == DISABLED) // if motor is disabled, enable it
         enableMotor();
     ctrl.status = ACC;
-    setDir(relative < 0);                                                                        // set CCW if <0, else set CW
+    setDir(relative < 0); // set CCW if <0, else set CW
     currentPos += relative;
-    calc(abs(relative));                                                   // calculate velocity profile
+    calc(abs(relative));                                                                         // calculate velocity profile
     ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
     ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
 
     return ESP_OK;
 }
 
-esp_err_t DendoStepper::runPosMm(int32_t relative){
-    if(ctrl.stepsPerMm == 0){
-        STEP_LOGE("DendoStepper","Steps per millimeter not set, cannot move!");
+esp_err_t DendoStepper::runPosMm(int32_t relative)
+{
+    if (ctrl.stepsPerMm == 0)
+    {
+        STEP_LOGE("DendoStepper", "Steps per millimeter not set, cannot move!");
     }
-    return runPos(relative*ctrl.stepsPerMm);
+    return runPos(relative * ctrl.stepsPerMm);
 }
 
 esp_err_t DendoStepper::runAbs(uint32_t position)
@@ -156,19 +158,20 @@ esp_err_t DendoStepper::runAbs(uint32_t position)
     if (position == currentPos) // we cant go anywhere
         return 0;
 
-
     int32_t relativeSteps = 0;
     relativeSteps = (int32_t)position - currentPos;
 
-    ESP_LOGI("DendoStepper","Cur: %llu move %d", currentPos, relativeSteps);
+    ESP_LOGI("DendoStepper", "Cur: %llu move %d", currentPos, relativeSteps);
     return runPos(relativeSteps); // run to new position
 }
 
-esp_err_t DendoStepper::runAbsMm(uint32_t position){
-    if(ctrl.stepsPerMm == 0){
-        STEP_LOGE("DendoStepper","Steps per millimeter not set, cannot move!");
+esp_err_t DendoStepper::runAbsMm(uint32_t position)
+{
+    if (ctrl.stepsPerMm == 0)
+    {
+        STEP_LOGE("DendoStepper", "Steps per millimeter not set, cannot move!");
     }
-    return runAbs(position*ctrl.stepsPerMm);
+    return runAbs(position * ctrl.stepsPerMm);
 }
 
 void DendoStepper::setSpeed(uint32_t speed, uint16_t accT, uint16_t decT)
@@ -181,21 +184,24 @@ void DendoStepper::setSpeed(uint32_t speed, uint16_t accT, uint16_t decT)
 
 void DendoStepper::setSpeedMm(uint32_t speed, uint16_t accT, uint16_t decT)
 {
-    if(ctrl.stepsPerMm == 0){
-        STEP_LOGE("DendoStepper","Steps per millimeter not set, cannot set the speed!");
+    if (ctrl.stepsPerMm == 0)
+    {
+        STEP_LOGE("DendoStepper", "Steps per millimeter not set, cannot set the speed!");
     }
-    ctrl.speed = speed*ctrl.stepsPerMm;
+    ctrl.speed = speed * ctrl.stepsPerMm;
 
     ctrl.acc = ctrl.speed / (accT / 4000.0);
     ctrl.dec = ctrl.speed / (decT / 4000.0);
     STEP_LOGI("DendoStepper", "Speed set: v=%d mm/s t+=%d s t-=%d s", speed, accT, decT);
 }
 
-void DendoStepper::setStepsPerMm(uint16_t steps){
+void DendoStepper::setStepsPerMm(uint16_t steps)
+{
     ctrl.stepsPerMm = steps;
 }
 
-uint16_t DendoStepper::getStepsPerMm(){
+uint16_t DendoStepper::getStepsPerMm()
+{
     return ctrl.stepsPerMm;
 }
 
@@ -209,8 +215,9 @@ uint64_t DendoStepper::getPosition()
     return currentPos;
 }
 
-uint64_t DendoStepper::getPositionMm(){
-    return getPosition()/ctrl.stepsPerMm;
+uint64_t DendoStepper::getPositionMm()
+{
+    return getPosition() / ctrl.stepsPerMm;
 }
 
 void DendoStepper::resetAbsolute()
@@ -220,18 +227,20 @@ void DendoStepper::resetAbsolute()
 
 void DendoStepper::runInf(bool direction)
 {
-    if(ctrl.status > IDLE){
-        STEP_LOGE("DendoStepper","Motor is moving, this command will be ignored");
+    if (ctrl.status > IDLE)
+    {
+        STEP_LOGE("DendoStepper", "Motor is moving, this command will be ignored");
         return;
     }
-    if(ctrl.status == DISABLED){
+    if (ctrl.status == DISABLED)
+    {
         enableMotor();
     }
     ctrl.runInfinite = true;
     setDir(direction);
     calc(UINT32_MAX);
     ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
-    ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                                             // start the timer
+    ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
 }
 
 uint16_t DendoStepper::getSpeed()
@@ -239,14 +248,15 @@ uint16_t DendoStepper::getSpeed()
     return ctrl.speed;
 }
 
-uint16_t DendoStepper::getAcc()
+float DendoStepper::getAcc()
 {
     return ctrl.acc;
 }
 
 void DendoStepper::stop()
 {
-    if(ctrl.status <= IDLE){
+    if (ctrl.status <= IDLE)
+    {
         return;
     }
     ctrl.runInfinite = false;
@@ -275,7 +285,6 @@ bool DendoStepper::xISR()
     GPIO.out_w1ts = (1ULL << conf.stepPin);
     // add and substract one step
 
-
     ctrl.stepCnt++;
 
     // we are done
@@ -303,7 +312,7 @@ bool DendoStepper::xISR()
         ctrl.status = COAST; // we are coasting
     }
 
-    ctrl.stepInterval = TIMER_F/ctrl.currentSpeed;
+    ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     // set alarm to calculated interval and disable pin
     GPIO.out_w1tc = (1ULL << conf.stepPin);
     timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval);
@@ -312,32 +321,31 @@ bool DendoStepper::xISR()
 
 void DendoStepper::calc(uint32_t targetSteps)
 {
-    
-    ctrl.accSteps = 0.5*ctrl.acc*(ctrl.speed/ctrl.acc)*(ctrl.speed/ctrl.acc);
 
-    ctrl.decSteps = 0.5*ctrl.dec*(ctrl.speed/ctrl.dec)*(ctrl.speed/ctrl.dec);
+    ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
+
+    ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
 
     if (targetSteps < (ctrl.decSteps + ctrl.accSteps))
     {
-        ESP_LOGI("Dendostepper","Computing new speed");
+        ESP_LOGI("Dendostepper", "Computing new speed");
 
-        ctrl.speed = sqrt(2*targetSteps*((ctrl.dec*ctrl.acc)/(ctrl.dec+ctrl.acc)));
-        ctrl.accSteps = 0.5*ctrl.acc*(ctrl.speed/ctrl.acc)*(ctrl.speed/ctrl.acc);
-        ctrl.decSteps = 0.5*ctrl.dec*(ctrl.speed/ctrl.dec)*(ctrl.speed/ctrl.dec);
+        ctrl.speed = sqrt(2 * targetSteps * ((ctrl.dec * ctrl.acc) / (ctrl.dec + ctrl.acc)));
+        ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
+        ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
     }
 
     ctrl.accEnd = ctrl.accSteps;
     ctrl.coastEnd = targetSteps - ctrl.decSteps;
     ctrl.targetSpeed = ctrl.speed;
 
-    ctrl.accInc = ctrl.targetSpeed/(double)ctrl.accSteps;
-    ctrl.decInc = ctrl.targetSpeed/(double)ctrl.decSteps; 
+    ctrl.accInc = ctrl.targetSpeed / (double)ctrl.accSteps;
+    ctrl.decInc = ctrl.targetSpeed / (double)ctrl.decSteps;
 
     ctrl.currentSpeed = ctrl.accInc;
 
-    ctrl.stepInterval = TIMER_F/ctrl.currentSpeed;
+    ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     ctrl.stepsToGo = targetSteps;
 
     STEP_LOGI("calc", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
-
 }

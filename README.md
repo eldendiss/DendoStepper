@@ -1,50 +1,99 @@
 # DendoStepper
 
-#### This docs are outdated, new ones will be ready soon
-
-Work in progress, maybe unstable.  
+Work in progress, maybe unstable. Opening issues is more than welcome.  
 This library takes care of pulse generating for stepper motor drivers with STEP/DIR interface. Pulse generating utilizes general purpose timers to achieve some usable accuracy and smoothness.  
-Currently supports only linear acceleration and deceleration, exponential profile is TBD.
+Currently supports only linear acceleration and deceleration.
 
 ### Known limitations
 - maximum number of controlled stepper motors is 4, this is limited by number of general purpose timers
+- If the motor is moving, it is not possible to move it to another direction.
 
 ## Usage
 
 ```c++
 typedef struct
 {
-    uint8_t         step_p;         //step signal gpio
-    uint8_t         dir_p;          //dir signal gpio
-    uint8_t         en_p;           //enable signal gpio
-    timer_group_t   timer_group;    //timer group, useful if we are controlling more than 2 steppers
-    timer_idx_t     timer_idx;      //timer index, useful if we are controlling 2steppers
+    uint8_t stepPin;           /** step signal pin */
+    uint8_t dirPin;            /** dir signal pin */
+    uint8_t enPin;             /** enable signal pin */
+    timer_group_t timer_group; /** timer group, useful if we are controlling more than 2 steppers */
+    timer_idx_t timer_idx;     /** timer index, useful if we are controlling 2steppers */
+    microStepping_t miStep;    /** microstepping configured on driver - used in distance calculation */
+    float stepAngle;           /** one step angle in degrees (usually 1.8deg), used in steps per rotation calculation */
 } DendoStepper_config_t;
 
-DendoStepper(DendoStepper_config_t*);
+enum microStepping_t
+{
+    MICROSTEP_1 = 0x1,
+    MICROSTEP_2,
+    MICROSTEP_4 = 0x4,
+    MICROSTEP_8 = 0x8,
+    MICROSTEP_16 = 0x10,
+    MICROSTEP_32 = 0x20,
+    MICROSTEP_64 = 0x40,
+    MICROSTEP_128 = 0x80,
+    MICROSTEP_256 = 0x100,
+};
+
 ```  
-Constructor - accepts DendoStepper_config_t struct as parameter. This struct needs to be initialized before calling constructor.  
-timer_group and timer_idx are used to assign different timers to different instances.  
+Configuration struct, can be allocated on stack or heap.
 
 ```c++
 void init();
 ```  
-Initializes GPIO and Timer peripherals, registers ISR. Expects populated config struct is alreay passed to the object  
+Initializes GPIO and Timer peripherals, registers ISR. Expects populated config struct is alreay passed to the class using config()  
 
 ```c++
-void config(const DendoStepper_config_t* config);
+void config(DendoStepper_config_t* config);
 ```
-Same as init, but you can pass populated config struct if you didn't pass it in constructor.  
+Configures the class as per passed config struct pointer.  
 
 ```c++
-void setSpeed(uint16_t speed,uint16_t accTimeMs);
+void setStepsPerMm(uint16_t steps);
+uint16_t getStepsPerMm();
 ```
-Sets maximum speed in steps per second and acceleration time in milliseconds.  
+Sets or gets steps needed to move one millimiter, useful if stepper is moving along linear axis.  
+
+```c++
+void setSpeed(uint16_t speed,uint16_t accT, uint16_t decT);
+uint16_t getSpeed();
+float getAcc();
+```
+Sets maximum speed in steps per second, acceleration and deceleration time in milliseconds.  
+Gets speed in steps per second  
+Gets acceleration in steps per second per second
+
+```c++
+void setSpeedMm(uint16_t speed,uint16_t accT, uint16_t decT);
+```
+Sets maximum speed in mm/s, acceleration and deceleration time in milliseconds. Expects already defined steps per millimeter with setStepsPerMm()  
 
 ```c++
 void runPos(int32_t relative);
 ```
-Runs motor to position relative from current position, respecting constraints set with setSpeed()
+Runs motor to position relative from current position in steps, respecting constraints set with setSpeed()  
+
+```c++
+void runPosMm(int32_t relative);
+```
+Runs motor to position relative from current position in millimeters, respecting constraints set with setSpeed()  
+Expects already defined steps per millimeter with setStepsPerMm()  
+
+```c++
+ bool runAbsolute(uint32_t position);
+```
+Runs motor in absolute coordinate plane. Unit: steps (should be constrained with home switch)  
+
+```c++
+ bool runAbsoluteMm(uint32_t position);
+```
+Runs motor in absolute coordinate plane. Unit: millimiters (should be constrained with home switch)  
+Expects already defined steps per millimeter with setStepsPerMm()  
+
+```c++
+ bool runInf(bool direction);
+```
+Runs motor infintely in desired direction with constrains set using setSpeed().  
 
 ```c++
 void disableMotor();
@@ -65,29 +114,26 @@ enum motor_status{
 ```
 Returns current state of motor, return type is enum motor_status  
 
-```c++
- bool runAbsolute(uint32_t position);
-```
-Runs motor in absolute coordinate plane(should be constrained with home switch)  
 
 ```c++
 void resetAbsolute();
 ```
-Resets absolute position to 0. Called for ex. when endswitch is hit.
+Resets absolute position to 0. Called for ex. when endswitch is hit.  
 
 ```c++
-uint16_t getSpeed();
+void getPosition();
 ```
-Returns currently set motor speed
+Gets current position in absolute coordinate plane in steps.  
 
 ```c++
-uint16_t getAcc();
+void getPositionMm();
 ```
-Returns currently set acceleration time in ms
+Gets current position in absolute coordinate plane in millimeters.  
+Expects already defined steps per millimeter with setStepsPerMm()  
 
 ```c++
 void stop();
 ```
-Stops the motor dead on the spot. Eg. e-stop.
+Stops the motor dead on the spot. No deceleration is performed this way. Eg. e-stop.  
 
 
