@@ -16,9 +16,9 @@
 //#define STEP_DEBUG
 
 
-#define NS_TO_T_TICKS(x) (x/25)
-#define TIMER_F 20000000ULL
-#define TICK_PER_S 40000000ULL
+#define NS_TO_T_TICKS(x) (x)
+#define TIMER_F 1000000ULL
+#define TICK_PER_S TIMER_F
 
 enum motor_status{
     DISABLED,
@@ -57,25 +57,29 @@ typedef struct
     timer_group_t   timer_group;        /** timer group, useful if we are controlling more than 2 steppers */
     timer_idx_t     timer_idx;          /** timer index, useful if we are controlling 2steppers */
     microStepping_t miStep;             /** microstepping configured on driver - used in distance calculation */
-    float           stepsPerRot;        /** one step angle in degrees (usually 1.8deg), used in distance calculation */
+    float           stepAngle;          /** one step angle in degrees (usually 1.8deg), used in steps per rotation calculation */
 } DendoStepper_config_t;
 
 typedef struct{
     uint32_t    stepInterval=40000; //step interval in ns/25
-    int32_t     accelC;
-    uint32_t    rest=0;             //step interval increase during acc/dec phase
+    double      targetSpeed=0;      //target speed in steps/s
+    double      currentSpeed=0;
+    double      accInc=0;
+    double      decInc=0;
     uint32_t    stepCnt=0;          //step counter
     uint32_t    accEnd;             //when to end acc and start coast
-    uint32_t    accLim;
     uint32_t    coastEnd;           //when to end coast and start decel
     uint32_t    stepsToGo=0;        //steps we need to take
-    float       speed=100;          //speed in steps*second^-1
-    float       acc=100;            //acceleration in steps*second^-2
-    uint64_t    enOffTime=10000L;
-    volatile uint8_t     status=DISABLED;
+    float       speed=100;          //speed in rad/s
+    float       acc=100;            //acceleration in rad*second^-2
+    float       dec=100;            //decceleration in rad*second^-2
+    uint32_t    accSteps=0;
+    uint32_t    decSteps=0;
+    uint8_t     status=DISABLED;
     bool        dir=CW;
-    bool        homed=false;
     bool        runInfinite=false;
+    uint16_t    stepsPerRot;       //steps per one revolution, 360/stepAngle * microstep
+    uint16_t    stepsPerMm=0;           /** Steps per one milimiter, if the motor is performing linear movement */
 }ctrl_var_t;
 
 typedef struct {
@@ -99,13 +103,7 @@ private:
      *  @param accTimeMs acceleration time in ms
      *  @param target target position
      */
-    void calc(uint16_t, uint16_t,uint32_t);
-
-    /** @brief PRIVATE: Step interval calculation for infinite movement
-     *  @param speed maximum movement speed
-     *  @param accTimeMs acceleration time in ms
-     */
-    void calc(uint16_t, uint16_t);
+    void calc(uint32_t);
 
     /** @brief sets En GPIO
      *  @param state 0-LOW,1-HIGH
@@ -145,7 +143,7 @@ public:
      */
     void config(DendoStepper_config_t* config);
     
-    /** @brief initialize GPIO and Timer peripherals - LEGACY - deemed obsolete
+    /** @brief initialize GPIO and Timer peripherals
      *  @param stepP step pulse pin
      *  @param dirP direction signal pin
      *  @param enP enable signal Pin
@@ -165,17 +163,49 @@ public:
      */
     esp_err_t runPos(int32_t relative);
 
+    /** @brief runs motor to relative position in mm
+     *  @param relative number of mm to run, negative is reverse 
+     */
+    esp_err_t runPosMm(int32_t relative);
+
+    /** @brief run motor to position in absolute coordinates (steps)
+     *  @param postition absolute position in steps from home position (must be positive);
+     *  @return ESP_OK if motor can run immediately, ESP_ERR if it is currently moving
+     */
+    esp_err_t runAbs(uint32_t position);
+
+    /** @brief run motor to position in absolute coordinates (millimiters)
+     *  @param postition absolute position in mm from home position (must be positive);
+     *  @return ESP_OK if motor can run immediately, ESP_ERR if it is currently moving
+     */
+    esp_err_t runAbsMm(uint32_t position);
+
     /** @brief sets motor speed
      *  @param speed speed in steps per second
-     *  @param accTimeMs acceleration time in ms
+     *  @param accT acceleration time in ms
+     *  @param decT deceleration time in ms
      */
-    void setSpeed(uint32_t speed,uint16_t accTimeMs);
+    void setSpeed(uint32_t speed,uint16_t accT, uint16_t decT);
 
-    /** @brief sets motor speed and accel in radians
-     *  @param speed speed rad*s^-1
-     *  @param accTimeMs acceleration in rad*s^-2
+    /** @brief sets motor speed and accel in millimeters/second
+     *  @param speed speed mm*s^-1
+     *  @param accT acceleration time in ms
+     *  @param accT deceleration time in ms
      */
-    void setSpeedRad(float speed, float accTimeMs);
+    void setSpeedMm(uint32_t speed, uint16_t accT, uint16_t decT);
+
+    /**
+     * @brief Set steps per 1 mm of linear movement
+     * 
+     * @param steps steps needed to move one millimiter
+     */
+    void setStepsPerMm(uint16_t steps);
+
+    /**
+     * @brief get steps per 1mm settings
+     * 
+     */
+    uint16_t getStepsPerMm();
 
     /** @brief set EN pin 1, stops movement
     */
@@ -190,16 +220,21 @@ public:
      */
     uint8_t getState();
 
-    /** @brief run motor to position in absolute coordinates (steps)
-     *  @param postition absolute position in steps from homing position (must be positive);
+    /** @brief run motor to position in absolute coordinates (millimiters)
+     *  @param postition absolute position in steps from home position (must be positive);
      *  @return ESP_OK if motor can run immediately, ESP_ERR if it is currently moving
      */
-    esp_err_t runAbsolute(uint32_t position);
+    esp_err_t runAbsoluteMm(uint32_t position);
 
     /** @brief returns current absolute position
      *  @return current absolute postion in steps
      */
     uint64_t getPosition();
+
+    /** @brief returns current absolute position
+     *  @return current absolute postion in steps
+     */
+    uint64_t getPositionMm();
 
     /** @brief resets absolute pos to 0
      */
@@ -210,7 +245,7 @@ public:
     */
     void runInf(bool direction);
 
-    /** @brief returns current speed
+    /** @brief returns current speed in steps per second
      */
     uint16_t getSpeed();
 
