@@ -87,7 +87,7 @@ Runs motor in absolute coordinate plane. Unit: steps (should be constrained with
 ```c++
  bool runAbsoluteMm(uint32_t position);
 ```
-Runs motor in absolute coordinate plane. Unit: millimiters (should be constrained with home switch)  
+Runs motor in absolute coordinate plane. Unit: millimeters (should be constrained with home switch)  
 Expects already defined steps per millimeter with setStepsPerMm()  
 
 ```c++
