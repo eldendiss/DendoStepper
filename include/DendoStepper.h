@@ -22,13 +22,13 @@
 
 #include "stdint.h"
 #include "stdio.h"
-#include <cstring>
-#include "driver/timer.h"
+#include "string.h"
+#include "driver/gptimer.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_timer.h"
 #include "math.h"
+#include "hal/gpio_ll.h"
 
 //#define STEP_DEBUG
 
@@ -51,8 +51,7 @@ enum dir
     CCW
 };
 
-enum microStepping_t
-{
+typedef enum {
     MICROSTEP_1 = 0x1,
     MICROSTEP_2,
     MICROSTEP_4 = 0x4,
@@ -62,20 +61,18 @@ enum microStepping_t
     MICROSTEP_64 = 0x40,
     MICROSTEP_128 = 0x80,
     MICROSTEP_256 = 0x100,
-};
+} microStepping_t;
 
 /**
  * @brief Configuration structure
  */
 typedef struct
 {
-    uint8_t stepPin;           /** step signal pin */
-    uint8_t dirPin;            /** dir signal pin */
-    uint8_t enPin;             /** enable signal pin */
-    timer_group_t timer_group; /** timer group, useful if we are controlling more than 2 steppers */
-    timer_idx_t timer_idx;     /** timer index, useful if we are controlling 2steppers */
-    microStepping_t miStep;    /** microstepping configured on driver - used in distance calculation */
-    float stepAngle;           /** one step angle in degrees (usually 1.8deg), used in steps per rotation calculation */
+    uint8_t stepPin;                /** step signal pin */
+    uint8_t dirPin;                 /** dir signal pin */
+    uint8_t enPin;                  /** enable signal pin */
+    microStepping_t miStep;         /** microstepping configured on driver - used in distance calculation */
+    float stepAngle;                /** one step angle in degrees (usually 1.8deg), used in steps per rotation calculation */
 } DendoStepper_config_t;
 
 typedef struct
@@ -106,8 +103,11 @@ class DendoStepper
 private:
     DendoStepper_config_t conf;
     ctrl_var_t ctrl;
-    esp_timer_handle_t dyingTimer;
     TaskHandle_t enTask;
+    gptimer_handle_t timer_handle;  /** timer handle */
+    gptimer_alarm_config_t alarm_cfg = {
+        .reload_count = 0
+    };
     uint64_t currentPos = 0; // absolute position
     bool timerStarted = 0;
 
@@ -133,9 +133,9 @@ private:
      *  @param _this DendoStepper* this pointer
      *  @return bool
      */
-    static bool xISRwrap(void *_this)
+    static bool xISRwrap(gptimer_t* timer, const gptimer_alarm_event_data_t* data,void *_this)
     {
-        return static_cast<DendoStepper *>(_this)->xISR();
+        return static_cast<DendoStepper *>(_this)->xISR(timer,data);
     }
 
     /** @brief enableMotor wrapper
@@ -145,7 +145,7 @@ private:
         static_cast<DendoStepper *>(_this)->disableMotor();
     }
 
-    bool xISR();
+    bool xISR(gptimer_t* timer, const gptimer_alarm_event_data_t* data);
 
 public:
     /** @brief Costructor - conf variables to be passed later
@@ -166,7 +166,7 @@ public:
      *  @param microstepping microstepping performed by the driver, used for more accuracy
      *  @param stepsPerRot how many steps it takes for the motor to move 2Pi rads. this can be also used instead of microstepping parameter
      */
-    void init(uint8_t, uint8_t, uint8_t, timer_group_t, timer_idx_t, microStepping_t microstep, uint16_t stepsPerRot);
+    void init(uint8_t, uint8_t, uint8_t, microStepping_t microstep, uint16_t stepsPerRot);
 
     /** @brief initialize GPIO and Timer peripherals, class must be configured beforehand with @attention config()
      */
