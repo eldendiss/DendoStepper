@@ -13,8 +13,6 @@ extern "C" void app_main(void)
         .stepPin = 16,
         .dirPin = 17,
         .enPin = 15,
-        .timer_group = TIMER_GROUP_0,
-        .timer_idx = TIMER_0,
         .miStep = MICROSTEP_32,
         .stepAngle = 1.8};
 
@@ -22,8 +20,6 @@ extern "C" void app_main(void)
         .stepPin = 18,
         .dirPin = 19,
         .enPin = 20,
-        .timer_group = TIMER_GROUP_0,
-        .timer_idx = TIMER_1,
         .miStep = MICROSTEP_32,
         .stepAngle = 1.8};
 
@@ -43,7 +39,7 @@ extern "C" void app_main(void)
     {
         step.runPosMm(500);
         step1.runPos(10000);
-        vTaskDelay(1000);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         // step.runAbs(5000);
     }
 }
