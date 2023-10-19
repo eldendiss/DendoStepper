@@ -270,6 +270,7 @@ bool DendoStepper::xISR(gptimer_t *timer, const gptimer_alarm_event_data_t *data
         ctrl.status = IDLE;
         ctrl.stepCnt = 0;
         gptimer_disable(timer_handle);
+        GPIO.out_w1tc = (1ULL << conf.stepPin);
         return 0;
     }
 
