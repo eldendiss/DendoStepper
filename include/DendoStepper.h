@@ -263,9 +263,19 @@ public:
      */
     uint16_t getSpeed();
 
+
+    /** @brief returns current target speed in steps per second
+     */
+    uint16_t getTargetSpeed();
+
+
     /** @brief returns current acceleration time in ms
      */
     float getAcc();
+
+    /** @brief returns current deceleration time in ms
+     */
+    float getDec();
 
     /** @brief stops the motor dead, but stays enabled
      */
