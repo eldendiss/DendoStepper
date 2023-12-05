@@ -248,9 +248,19 @@ uint16_t DendoStepper::getSpeed()
     return ctrl.speed;
 }
 
+uint16_t DendoStepper::getTargetSpeed()
+{
+    return ctrl.targetSpeed;
+}
+
 float DendoStepper::getAcc()
 {
     return ctrl.acc;
+}
+
+float DendoStepper::getDec()
+{
+    return ctrl.dec;
 }
 
 void DendoStepper::stop()
