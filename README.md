@@ -16,8 +16,6 @@ typedef struct
     uint8_t stepPin;           /** step signal pin */
     uint8_t dirPin;            /** dir signal pin */
     uint8_t enPin;             /** enable signal pin */
-    timer_group_t timer_group; /** timer group, useful if we are controlling more than 2 steppers */
-    timer_idx_t timer_idx;     /** timer index, useful if we are controlling 2steppers */
     microStepping_t miStep;    /** microstepping configured on driver - used in distance calculation */
     float stepAngle;           /** one step angle in degrees (usually 1.8deg), used in steps per rotation calculation */
 } DendoStepper_config_t;

@@ -100,7 +100,6 @@ esp_err_t DendoStepper::runPos(int32_t relative)
         enableMotor();
     ctrl.status = ACC;
     setDir(relative < 0); // set CCW if <0, else set CW
-    currentPos += relative;
     calc(abs(relative)); // calculate velocity profile
 
     alarm_cfg.alarm_count = ctrl.stepInterval;
@@ -273,6 +272,16 @@ bool DendoStepper::xISR(gptimer_t *timer, const gptimer_alarm_event_data_t *data
 
     ctrl.stepCnt++;
 
+    // update current position
+    if (ctrl.dir == CW)
+    {
+        currentPos++;
+    }
+    else
+    {
+        currentPos--;
+    }
+
     // we are done
     if (ctrl.stepsToGo == ctrl.stepCnt && !ctrl.runInfinite)
     {
@@ -280,6 +289,7 @@ bool DendoStepper::xISR(gptimer_t *timer, const gptimer_alarm_event_data_t *data
         ctrl.status = IDLE;
         ctrl.stepCnt = 0;
         gptimer_disable(timer_handle);
+        GPIO.out_w1tc = (1ULL << conf.stepPin);
         return 0;
     }
 
